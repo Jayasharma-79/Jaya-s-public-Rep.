@@ -1,0 +1,358 @@
+*&---------------------------------------------------------------------*
+*& Report ZJS_ADVANCE_ALV
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT zjs_advance_alv.
+
+INCLUDE zjs_advance_alv_data.
+
+INITIALIZATION.
+  INCLUDE zjs_advance_alv_screen.
+
+START-OF-SELECTION.
+  INCLUDE zjs_advance_alv_selection.
+
+  PERFORM layout.
+
+  IF rad1 = 'X'.
+
+    PERFORM display_classical.
+
+  ELSEIF rad2 = 'X'.
+
+    PERFORM fieldcat.
+    PERFORM display_alv.
+
+  ENDIF.
+
+TOP-OF-PAGE.
+  PERFORM topofpage.
+
+INCLUDE zjs_advance_alv_subroutines.
+
+**************************************************************************************************************************************************************************
+
+*&---------------------------------------------------------------------*
+*&  Include           ZJS_ADVANCE_ALV_DATA
+*&---------------------------------------------------------------------*
+TYPE-POOLS : slis.
+
+TABLES : zjs_emp_data.
+
+DATA : lv_valid TYPE abap_bool.
+DATA : go_alv_grid TYPE REF TO cl_gui_alv_grid.
+
+DATA : it_emp  TYPE TABLE OF zjs_emp_data,
+       it_emp1 TYPE TABLE OF zjs_emp_data,
+       wa_emp  TYPE zjs_emp_data,
+       wa_emp1 TYPE zjs_emp_data.
+
+DATA : it_fieldcat TYPE slis_t_fieldcat_alv,
+       wa_fieldcat TYPE slis_fieldcat_alv,
+       it_event    TYPE slis_t_event,
+       wa_event    LIKE LINE OF it_event,
+       he_it       TYPE slis_t_listheader,
+       he_wa       TYPE slis_listheader,
+       it_layout   TYPE slis_layout_alv.
+
+*********************************************************************************************************************************************************************
+
+*&---------------------------------------------------------------------*
+*&  Include           ZJS_ADVANCE_ALV_SCREEN
+*&---------------------------------------------------------------------*
+
+  SELECTION-SCREEN : BEGIN OF BLOCK b1 WITH FRAME.
+  SELECT-OPTIONS : empid FOR zjs_emp_data-emp_id DEFAULT 'E0001' TO 'E0030'.
+  SELECTION-SCREEN : END OF BLOCK b1.
+
+  SELECTION-SCREEN : BEGIN OF BLOCK b2 WITH FRAME.
+  PARAMETERS : rad1 RADIOBUTTON GROUP r1,
+               rad2 RADIOBUTTON GROUP r1 DEFAULT 'X'.
+  SELECTION-SCREEN : END OF BLOCK b2.
+
+*************************************************************************************************************************************************************************
+
+*&---------------------------------------------------------------------*
+*&  Include           ZJS_ADVANCE_ALV_SELECTION
+*&---------------------------------------------------------------------*
+
+  SELECT * FROM zjs_emp_data INTO TABLE it_emp WHERE emp_id IN empid.
+  IF sy-subrc <> 0.
+    MESSAGE e007(zjs_msg_cls).
+  ELSE .
+    it_emp1 = it_emp.
+  ENDIF.
+
+***************************************************************************************************************************************************************************
+
+*&---------------------------------------------------------------------*
+*&  Include           ZJS_ADVANCE_ALV_SUBROUTINES
+*&---------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*&      Form  LAYOUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM layout.
+  it_layout-zebra = 'X'.
+  it_layout-colwidth_optimize = 'X'.
+  it_layout-edit = 'X'.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  PF_STATUS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM pf_status USING extab TYPE slis_t_extab.
+  SET TITLEBAR 'TITLE'.
+  SET PF-STATUS 'PF'.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  FIELDCAT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fieldcat .
+
+  wa_fieldcat-col_pos = '1'.
+  wa_fieldcat-fieldname = 'EMP_ID'.
+  wa_fieldcat-tabname = 'IT_EMP'.
+  wa_fieldcat-seltext_l = 'Employee ID'.
+  APPEND wa_fieldcat TO it_fieldcat.
+  CLEAR wa_fieldcat.
+
+  wa_fieldcat-col_pos = '2'.
+  wa_fieldcat-fieldname = 'EMP_NAME'.
+  wa_fieldcat-tabname = 'IT_EMP'.
+  wa_fieldcat-seltext_l = 'Employee Name'.
+  APPEND wa_fieldcat TO it_fieldcat.
+  CLEAR wa_fieldcat.
+
+  wa_fieldcat-col_pos = '3'.
+  wa_fieldcat-fieldname = 'DEPT_ID'.
+  wa_fieldcat-tabname = 'IT_EMP'.
+  wa_fieldcat-seltext_l = 'Department ID'.
+  APPEND wa_fieldcat TO it_fieldcat.
+  CLEAR wa_fieldcat.
+
+  wa_fieldcat-col_pos = '4'.
+  wa_fieldcat-fieldname = 'JOIN_DATE'.
+  wa_fieldcat-tabname = 'IT_EMP'.
+  wa_fieldcat-seltext_l = 'Date of Joining'.
+  APPEND wa_fieldcat TO it_fieldcat.
+  CLEAR wa_fieldcat.
+
+  wa_fieldcat-col_pos = '5'.
+  wa_fieldcat-fieldname = 'SALARY'.
+  wa_fieldcat-tabname = 'IT_EMP'.
+  wa_fieldcat-seltext_l = 'Salary'.
+  APPEND wa_fieldcat TO it_fieldcat.
+  CLEAR wa_fieldcat.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  TABLE_HEADER
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM tab_head.
+
+  REFRESH he_it.
+  he_wa-typ = 'H'.
+  he_wa-info = TEXT-001.
+  APPEND he_wa TO he_it.
+  CLEAR he_wa.
+
+  he_wa-typ = 'S'.
+  he_wa-key = 'DATE:- '.
+  CONCATENATE sy-datum+6(2) '/' sy-datum+4(2) '/'
+sy-datum(4) INTO he_wa-info.
+  APPEND he_wa TO he_it.
+  CLEAR he_wa.
+
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING
+      it_list_commentary = he_it.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  USER_COMMAND
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM user_command USING p_ucomm TYPE sy-ucomm
+                      p_selfield TYPE slis_selfield.
+
+  IF go_alv_grid IS INITIAL.
+    CREATE OBJECT go_alv_grid
+      EXPORTING
+        i_parent = cl_gui_container=>screen0.
+  ENDIF.
+
+  CASE p_ucomm.
+    WHEN '&SAVE'.
+
+      CALL METHOD go_alv_grid->check_changed_data
+        IMPORTING
+          e_valid = lv_valid.
+
+**      CALL METHOD go_alv_grid->get_current_data
+**        IMPORTING
+**          et_outtab = it_emp.
+
+**      CALL METHOD go_alv_grid->refresh_table_display.
+
+      IF lv_valid = abap_true.
+
+        LOOP AT it_emp INTO wa_emp.
+          READ TABLE it_emp1 INTO wa_emp1 INDEX sy-tabix.
+          IF wa_emp1 <> wa_emp.
+            MODIFY zjs_emp_data FROM wa_emp.
+**            CALL METHOD go_alv_grid->refresh_table_display.
+            MESSAGE s009(zjs_msg_cls).
+          ENDIF.
+        ENDLOOP.
+
+      ELSE.
+        MESSAGE e010(zjs_msg_cls).
+      ENDIF.
+
+    WHEN '&DEL'.
+
+      READ TABLE it_emp INTO wa_emp INDEX p_selfield-tabindex.
+      DELETE FROM zjs_emp_data WHERE emp_id = wa_emp-emp_id.
+      IF sy-subrc = 0.
+        REFRESH it_emp.
+        SELECT * FROM zjs_emp_data INTO TABLE it_emp.
+        CLEAR wa_emp.
+**        CALL METHOD go_alv_grid->refresh_table_display.
+        MESSAGE s008(zjs_msg_cls).
+      ELSE.
+        MESSAGE e011(zjs_msg_cls).
+      ENDIF.
+
+    WHEN '&ADD'.
+
+      APPEND wa_emp TO it_emp.
+      CLEAR wa_emp.
+
+  ENDCASE.
+
+  p_selfield-refresh = 'X'.
+  p_selfield-col_stable = 'X'.
+  p_selfield-row_stable = 'X'.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_ALV
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM display_alv .
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+*     I_INTERFACE_CHECK        = ' '
+*     I_BYPASSING_BUFFER       = ' '
+*     I_BUFFER_ACTIVE          = ' '
+      i_callback_program       = sy-repid
+      i_callback_pf_status_set = 'PF_STATUS'
+      i_callback_user_command  = 'USER_COMMAND'
+      i_callback_top_of_page   = 'TAB_HEAD'
+*     I_CALLBACK_HTML_TOP_OF_PAGE       = ' '
+*     I_CALLBACK_HTML_END_OF_LIST       = ' '
+*     I_STRUCTURE_NAME         =
+*     I_BACKGROUND_ID          = ' '
+*     I_GRID_TITLE             =
+*     I_GRID_SETTINGS          =
+      is_layout                = it_layout
+      it_fieldcat              = it_fieldcat
+*     IT_EXCLUDING             =
+*     IT_SPECIAL_GROUPS        =
+*     IT_SORT                  =
+*     IT_FILTER                =
+*     IS_SEL_HIDE              =
+*     I_DEFAULT                = 'X'
+*     I_SAVE                   = ' '
+*     IS_VARIANT               =
+*     IT_EVENTS                =
+*     IT_EVENT_EXIT            =
+*     IS_PRINT                 =
+*     IS_REPREP_ID             =
+*     I_SCREEN_START_COLUMN    = 0
+*     I_SCREEN_START_LINE      = 0
+*     I_SCREEN_END_COLUMN      = 0
+*     I_SCREEN_END_LINE        = 0
+*     I_HTML_HEIGHT_TOP        = 0
+*     I_HTML_HEIGHT_END        = 0
+*     IT_ALV_GRAPHICS          =
+*     IT_HYPERLINK             =
+*     IT_ADD_FIELDCAT          =
+*     IT_EXCEPT_QINFO          =
+*     IR_SALV_FULLSCREEN_ADAPTER        =
+* IMPORTING
+*     E_EXIT_CAUSED_BY_CALLER  =
+*     ES_EXIT_CAUSED_BY_USER   =
+    TABLES
+      t_outtab                 = it_emp
+    EXCEPTIONS
+      program_error            = 1
+      OTHERS                   = 2.
+  IF sy-subrc <> 0.
+    MESSAGE e006(zjs_msg_cls).
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_CLASSICAL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM display_classical .
+
+  LOOP AT it_emp INTO wa_emp.
+    WRITE : / wa_emp-emp_id, 15 wa_emp-emp_name, 35 wa_emp-dept_id, 55 wa_emp-join_date, 71 wa_emp-salary.
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  TOPOFPAGE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM topofpage .
+  IF rad1 = 'X'.
+    WRITE : / 'Employee ID', 15 'Employee name', 35 'Department ID', 55 'Date of joining', 75 'Salary'.
+  ENDIF.
+ENDFORM.
+
