@@ -1,0 +1,331 @@
+*&---------------------------------------------------------------------*
+*& Report ZJS_SALES_REPORT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT zjs_sales_report.
+
+INCLUDE : zjs_sales_report_data.
+
+INITIALIZATION.
+  INCLUDE : zjs_sales_report_screen.
+
+START-OF-SELECTION.
+  PERFORM fetch_data.
+  PERFORM fieldcat.
+  PERFORM display_data.
+
+  INCLUDE : zjs_sales_report_forms.
+
+*****************************************************************************************************************************************************************************
+*&---------------------------------------------------------------------*
+*&  Include           ZJS_SALES_REPORT_DATA
+*&---------------------------------------------------------------------*
+
+TYPES : BEGIN OF ty_vbak,
+          vbeln TYPE vbeln_va,
+          erdat TYPE erdat,
+          ernam TYPE ernam,
+        END OF ty_vbak.
+
+TYPES : BEGIN OF ty_vbap,
+          matnr  TYPE matnr,
+          vbeln  TYPE vbeln_va,
+          posnr  TYPE posnr_va,
+          kwmeng TYPE kwmeng,
+          vrkme  TYPE vrkme,
+          maktx  TYPE maktx,
+        END OF ty_vbap.
+
+TYPES : BEGIN OF ty_makt,
+          matnr TYPE matnr,
+          maktx TYPE maktx,
+        END OF ty_makt.
+
+DATA : it_vbak     TYPE TABLE OF ty_vbak,
+       it_vbap     TYPE TABLE OF zjs_stru_sales,
+       it_makt     TYPE TABLE OF ty_makt,
+       wa_vbak     TYPE ty_vbak,
+       wa_vbap     TYPE zjs_stru_sales,
+       wa_makt     TYPE ty_makt,
+       wa_fieldcat TYPE slis_fieldcat_alv,
+       it_fieldcat TYPE slis_t_fieldcat_alv.
+
+**********************************************************************************************************************************************************************
+
+*&---------------------------------------------------------------------*
+*&  Include           ZJS_SALES_REPORT_SCREEN
+*&---------------------------------------------------------------------*
+
+SELECTION-SCREEN : BEGIN OF BLOCK b1 WITH FRAME.
+PARAMETERS : j_erdat TYPE erdat,
+             j_ernam TYPE ername.
+SELECTION-SCREEN : END OF BLOCK b1.
+
+**************************************************************************************************************************************************************************
+
+*&---------------------------------------------------------------------*
+*&  Include           ZJS_SALES_REPORT_FORMS
+*&---------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*&      Form  FETCH_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+
+FORM fetch_data .
+  SELECT vbeln erdat ernam FROM vbak INTO TABLE it_vbak WHERE erdat = j_erdat AND ernam = j_ernam.
+  IF sy-subrc = 0.
+    IF it_vbak IS NOT INITIAL.
+      SELECT matnr vbeln posnr kwmeng vrkme
+        FROM vbap
+        INTO TABLE it_vbap
+       FOR ALL ENTRIES IN it_vbak
+       WHERE vbeln = it_vbak-vbeln.
+
+      IF it_vbap IS NOT INITIAL.
+        SELECT matnr maktx
+          FROM makt
+          INTO TABLE it_makt
+         FOR ALL ENTRIES IN it_vbap
+         WHERE matnr = it_vbap-matnr
+           AND spras = sy-langu. " Language key for material description
+
+        LOOP AT it_vbap INTO wa_vbap.
+          READ TABLE it_makt INTO wa_makt WITH KEY matnr = wa_vbap-matnr.
+          IF sy-subrc = 0.
+            wa_vbap-maktx = wa_makt-maktx.
+            MODIFY it_vbap FROM wa_vbap.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  FIELDCAT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+
+FORM fieldcat .
+  wa_fieldcat-row_pos = 1.
+  wa_fieldcat-col_pos = 1.
+  wa_fieldcat-fieldname = 'MATNR'.
+  wa_fieldcat-tabname = 'IT_VBAP'.
+  wa_fieldcat-seltext_l = 'Material Number'.
+  APPEND wa_fieldcat TO it_fieldcat.
+  CLEAR wa_fieldcat.
+
+  wa_fieldcat-row_pos = 1.
+  wa_fieldcat-col_pos = 1.
+  wa_fieldcat-fieldname = 'VBELN'.
+  wa_fieldcat-tabname = 'IT_VBAP'.
+  wa_fieldcat-seltext_l = 'Sales Document Number'.
+  APPEND wa_fieldcat TO it_fieldcat.
+  CLEAR wa_fieldcat.
+
+  wa_fieldcat-row_pos = 1.
+  wa_fieldcat-col_pos = 1.
+  wa_fieldcat-fieldname = 'POSNR'.
+  wa_fieldcat-tabname = 'IT_VBAP'.
+  wa_fieldcat-seltext_l = 'Sales Document Item'.
+  APPEND wa_fieldcat TO it_fieldcat.
+  CLEAR wa_fieldcat.
+
+  wa_fieldcat-row_pos = 1.
+  wa_fieldcat-col_pos = 1.
+  wa_fieldcat-fieldname = 'KWMENG'.
+  wa_fieldcat-tabname = 'IT_VBAP'.
+  wa_fieldcat-seltext_l = 'Cumulative Order Quantity'.
+  APPEND wa_fieldcat TO it_fieldcat.
+  CLEAR wa_fieldcat.
+
+  wa_fieldcat-row_pos = 1.
+  wa_fieldcat-col_pos = 1.
+  wa_fieldcat-fieldname = 'VRKME'.
+  wa_fieldcat-tabname = 'IT_VBAP'.
+  wa_fieldcat-seltext_l = 'Sales Unit'.
+  APPEND wa_fieldcat TO it_fieldcat.
+  CLEAR wa_fieldcat.
+
+  wa_fieldcat-row_pos = 1.
+  wa_fieldcat-col_pos = 1.
+  wa_fieldcat-fieldname = 'MAKTX'.
+  wa_fieldcat-tabname = 'IT_VBAP'.
+  wa_fieldcat-seltext_l = 'Material Description'.
+  APPEND wa_fieldcat TO it_fieldcat.
+  CLEAR wa_fieldcat.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+
+FORM display_data .
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+*     I_INTERFACE_CHECK        = ' '
+*     I_BYPASSING_BUFFER       = ' '
+*     I_BUFFER_ACTIVE          = ' '
+      i_callback_program       = sy-repid
+      i_callback_pf_status_set = 'PF_STATUS'
+      i_callback_user_command  = 'USER_COMMAND '
+*     I_CALLBACK_TOP_OF_PAGE   = ' '
+*     I_CALLBACK_HTML_TOP_OF_PAGE       = ' '
+*     I_CALLBACK_HTML_END_OF_LIST       = ' '
+*     I_STRUCTURE_NAME         =
+*     I_BACKGROUND_ID          = ' '
+*     I_GRID_TITLE             =
+*     I_GRID_SETTINGS          =
+*     IS_LAYOUT                =
+      it_fieldcat              = it_fieldcat
+*     IT_EXCLUDING             =
+*     IT_SPECIAL_GROUPS        =
+*     IT_SORT                  =
+*     IT_FILTER                =
+*     IS_SEL_HIDE              =
+*     I_DEFAULT                = 'X'
+*     I_SAVE                   = ' '
+*     IS_VARIANT               =
+*     IT_EVENTS                =
+*     IT_EVENT_EXIT            =
+*     IS_PRINT                 =
+*     IS_REPREP_ID             =
+*     I_SCREEN_START_COLUMN    = 0
+*     I_SCREEN_START_LINE      = 0
+*     I_SCREEN_END_COLUMN      = 0
+*     I_SCREEN_END_LINE        = 0
+*     I_HTML_HEIGHT_TOP        = 0
+*     I_HTML_HEIGHT_END        = 0
+*     IT_ALV_GRAPHICS          =
+*     IT_HYPERLINK             =
+*     IT_ADD_FIELDCAT          =
+*     IT_EXCEPT_QINFO          =
+*     IR_SALV_FULLSCREEN_ADAPTER        =
+*   IMPORTING
+*     E_EXIT_CAUSED_BY_CALLER  =
+*     ES_EXIT_CAUSED_BY_USER   =
+    TABLES
+      t_outtab                 = it_vbap
+*   EXCEPTIONS
+*     PROGRAM_ERROR            = 1
+*     OTHERS                   = 2
+    .
+  IF sy-subrc <> 0.
+    MESSAGE e001(zjs_msg_cls).
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  PF_STATUS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+
+FORM pf_status USING extab TYPE slis_t_extab.
+  SET PF-STATUS 'PF_STATUS'.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  USER_COMMAND
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+
+FORM user_command USING p_ucomm TYPE sy-ucomm
+                        p_selfield TYPE slis_selfield.
+  CASE sy-ucomm.
+    WHEN 'BACK'.
+      SET SCREEN 0.
+    WHEN 'PRINT'.
+      PERFORM print_data.
+  ENDCASE.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  PRINT_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+
+FORM print_data.
+
+  CONSTANTS: js_form TYPE tdsfname VALUE 'ZJS_SF_SALES_REPORT'.
+
+  DATA: fm_name        TYPE rs38l_fnam,
+        lt_form_data   TYPE TABLE OF zjs_stru_sales,
+        control_param  TYPE ssfctrlop,    " Control parameters for Smart Form
+        output_options TYPE ssfcompop,   " Output options for Smart Form
+        lv_fnam        TYPE rs38l_fnam.
+
+  lt_form_data = it_vbap. " Assign the final table to form data
+
+  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+    EXPORTING
+      formname           = js_form
+*     VARIANT            = ' '
+*     DIRECT_CALL        = ' '
+    IMPORTING
+      fm_name            = lv_fnam
+    EXCEPTIONS
+      no_form            = 1
+      no_function_module = 2
+      OTHERS             = 3.
+  IF sy-subrc <> 0.
+    MESSAGE e002(zjs_msg_cls).
+  ENDIF.
+
+  control_param-no_open = 'X'.   " Example: Do not open a new spool request
+  control_param-no_close = 'X'.  " Example: Do not close the spool request
+
+  CALL FUNCTION lv_fnam
+    EXPORTING
+*     ARCHIVE_INDEX    =
+*     ARCHIVE_INDEX_TAB  =
+*     ARCHIVE_PARAMETERS =
+*     control_parameters = control_param
+*     MAIL_APPL_OBJ    =
+*     MAIL_RECIPIENT   =
+*     MAIL_SENDER      =
+*     output_options   = output_options
+*     USER_SETTINGS    = 'X'
+      it_final         = lt_form_data
+*   IMPORTING
+*     DOCUMENT_OUTPUT_INFO       =
+*     JOB_OUTPUT_INFO  =
+*     JOB_OUTPUT_OPTIONS =
+    EXCEPTIONS
+      formatting_error = 1
+      internal_error   = 2
+      send_error       = 3
+      user_canceled    = 4
+      OTHERS           = 5.
+  IF sy-subrc <> 0.
+    MESSAGE e003(zjs_msg_cls).
+  ENDIF.
+ENDFORM.
+
+********************************************************************************************************************************************************************
