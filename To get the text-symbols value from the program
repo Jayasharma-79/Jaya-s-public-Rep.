@@ -1,0 +1,188 @@
+FUNCTION zjs_fm_get_text.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     REFERENCE(TEXT_NAME) TYPE  TDOBNAME
+*"     REFERENCE(TEXT_ID) TYPE  TDID
+*"     REFERENCE(TEXT_OBJECT) TYPE  TDOBJECT
+*"     REFERENCE(LANGUAGE) TYPE  SPRAS
+*"     REFERENCE(PROGRAMNAME) TYPE  SY-REPID
+*"  TABLES
+*"      LT_FINAL STRUCTURE  TLINE
+*"      LT_VAR STRUCTURE  ZJS_VAR_STR
+*"      MSG_TAB STRUCTURE  BAPIRET1
+*"  EXCEPTIONS
+*"      NO_DATA_FOUND
+*"      NO_TEXT_SYMBOL_FOUND
+*"      ERROR_IN_REPLACEMENT
+*"----------------------------------------------------------------------
+
+  DATA : lwa_var  TYPE zjs_var_str,               " Work area for text-symbol-names
+         lt_line  TYPE STANDARD TABLE OF tline,   " Table to hold text lines
+         lwa_line TYPE tline.                     " Work area for individual text lines
+
+  DATA : lv_total TYPE n LENGTH 3,                " Counter to track matched symbols
+         lv_row   TYPE sy-tabix,                  " Row counter for lt_var
+         lv_row1  TYPE sy-tabix.                  " Row counter for lt_line
+
+  CALL FUNCTION 'READ_TEXT'                       " Read the text from the specified object and ID using READ_TEXT
+    EXPORTING
+*     CLIENT                  = SY-MANDT
+      id                      = text_id
+      language                = language
+      name                    = text_name
+      object                  = text_object
+*     ARCHIVE_HANDLE          = 0
+*     LOCAL_CAT               = ' '
+*   IMPORTING
+*     HEADER                  =
+*     OLD_LINE_COUNTER        =
+    TABLES
+      lines                   = lt_line         " Store the text in lt_line
+    EXCEPTIONS
+      id                      = 1
+      language                = 2
+      name                    = 3
+      not_found               = 4
+      object                  = 5
+      reference_check         = 6
+      wrong_access_to_archive = 7
+      OTHERS                  = 8.
+  IF sy-subrc <> 0.
+    RAISE no_data_found.                       " Exception raised if no text found
+  ENDIF.
+
+  IF lt_var[] IS NOT INITIAL.                  " Check if there are any text symbols provided
+    lv_total = 0.
+
+    SEARCH lt_line FOR '&' AND MARK.
+
+    IF sy-subrc EQ 0.                        "to check whether text-symbols exist in the so10 text or not
+      msg_tab-id = 'ZJP_MSG_CLS'.
+      msg_tab-number = '000'.
+      msg_tab-type = 'S'.
+      APPEND msg_tab.
+    ENDIF.
+
+    LOOP AT lt_var[] INTO lwa_var.         " Loop through each text symbol to search for it in the text lines
+      SEARCH lt_line FOR  lwa_var-text_symbol_name AND MARK.
+      IF sy-subrc = 0.
+        lv_total = lv_total + 1.                    " Increment counter if symbol is found
+      ELSE.
+**        RAISE no_text_symbol_found.                 " Raise exception if symbol not found
+        msg_tab-message_v1 = lwa_var-text_symbol_name.
+        msg_tab-id = 'ZJP_MSG_CLS'.
+        msg_tab-number = '001'.
+        msg_tab-type = 'E'.
+        APPEND msg_tab.
+      ENDIF.
+      CLEAR lwa_var.              "clear work area
+    ENDLOOP.
+
+  ENDIF.
+
+  DESCRIBE TABLE lt_var LINES lv_row.
+  IF lv_row = lv_total.                  " Compare the total number of symbols found with the number of symbols provided
+
+    " If all symbols are found, initiate the text symbol replacement process
+    CALL FUNCTION 'SET_TEXTSYMBOL_PROGRAM'
+      EXPORTING
+        program = programname                  "Set the program where the symbol replacement happens
+        event   = 'OPEN_FORM'.
+
+    DESCRIBE TABLE lt_line LINES lv_row1.          " Describe the total number of lines in the text
+
+    CALL FUNCTION 'REPLACE_TEXTSYMBOL'        " Replace the text symbols within the lines using REPLACE_TEXTSYMBOL function module
+      EXPORTING
+        endline          = lv_row1
+*       FORMATWIDTH      = 72
+        language         = sy-langu
+*       LINEWIDTH        = 132
+*       OPTION_DIALOG    = ' '
+        replace_program  = 'X'
+        replace_standard = 'X'
+        replace_system   = 'X'
+        replace_text     = 'X'
+        startline        = 1
+*                 IMPORTING
+*       CHANGED          =
+      TABLES
+        lines            = lt_line[].           " Store the final output lines in lt_final
+    IF sy-subrc <> 0.
+      RAISE error_in_replacement.
+    ELSE.
+      MOVE-CORRESPONDING lt_line[] TO lt_final[].
+    ENDIF.
+  ENDIF.
+ENDFUNCTION.
+
+
+************************************************************************************************************************************************************************
+
+*&---------------------------------------------------------------------*
+*& Report ZJS_GET_TEXT_DETAIL
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT zjs_get_text_detail.
+
+DATA : Lt_SYM     TYPE TABLE OF zjs_var_str,   " Table to hold text symbols
+       lwa_sym    TYPE zjs_var_str,            " Work area for text symbols
+       lt_output  TYPE STANDARD TABLE OF tline, " Table to hold the output text lines
+       lwa_output TYPE tline,                  " Work area for output text lines
+       messages   TYPE  TABLE OF bapiret1.     " table to capture messages from the function module
+
+SELECTION-SCREEN : BEGIN OF BLOCK b1 WITH FRAME.
+  PARAMETERS : z_name TYPE string DEFAULT 'Jayamala Sharma', " Name parameter
+               z_phn  TYPE char10 DEFAULT '9467260360',     " Phone number parameter
+               z_date TYPE sy-datum DEFAULT sy-datum,        " Date parameter
+               z_time TYPE sy-uzeit DEFAULT sy-uzeit.        " Time parameter
+SELECTION-SCREEN : END OF BLOCK b1.
+
+lwa_sym-text_symbol_name = 'Z_NAME'.
+APPEND lwa_sym TO lt_sym.
+
+lwa_sym-text_symbol_name = 'Z_PHN'.
+APPEND lwa_sym TO lt_sym.
+
+lwa_sym-text_symbol_name = 'Z_TIME'.
+APPEND lwa_sym TO lt_sym.
+
+lwa_sym-text_symbol_name = 'Z_DATE'.
+APPEND lwa_sym TO lt_sym.
+
+* Call custom function module to get text
+CALL FUNCTION 'ZJS_FM_GET_TEXT'
+  EXPORTING
+    text_name            = 'ZPRB4_FM_TEST_UV'  " Name of the text object
+    text_id              = 'ST'                " Text ID
+    text_object          = 'TEXT'              " Text object type
+    language             = 'E'                 " Language
+    programname          = 'ZJS_GET_TEXT_DETAIL' " Name of the calling program
+  TABLES
+    lt_final             = lt_output           " Table to receive the final output text
+    lt_var               = lt_sym              " Table of text symbols
+    msg_tab              = messages            " Capture any messages returned by the function module
+  EXCEPTIONS
+    no_data_found        = 1
+    no_text_symbol_found = 2
+    error_in_replacement = 3
+    OTHERS               = 4.
+IF sy-subrc <> 0.
+  MESSAGE 'Error Occured' TYPE 'E'.         " Display error message
+ENDIF.
+
+IF lt_output IS NOT INITIAL.                " Check if the output table is not empty
+  LOOP AT lt_output INTO lwa_output.       " Loop through each line of output
+    WRITE : / lwa_output-tdline.            " Write the output text line
+  ENDLOOP.
+ENDIF.
+
+ULINE.
+
+***LOOP AT messages INTO DATA(lwa_message).             " Display the message using the dynamic MESSAGE statement
+***  MESSAGE ID lwa_message-id
+***          TYPE lwa_message-type
+***          NUMBER lwa_message-number
+***          WITH lwa_message-message_v1.
+***ENDLOOP.
